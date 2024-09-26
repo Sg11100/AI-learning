@@ -12,7 +12,7 @@ import random
 # 用GPU训练
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def data_ready(Path: str = "datasets"):
-    # 将图像转换为28*28, 张量并进行归一化
+    # 将图像转换为28*28, 张量化并进行归一化
     transform = transforms.Compose(
         [transforms.Resize((28, 28)),
          transforms.ToTensor(),
@@ -76,7 +76,12 @@ class extradata(Dataset): #从kaggle上额外寻找的数据集，约有21k图�
             image = self.transform(image)
 
         return image, label
+
 class improved_Model(nn.Module):
+    '''
+    改进过后的模型，有四个卷积层，并添加了ReLU激活函数
+    和dropout来防止过拟合，增强泛化能力
+    '''
     def __init__(self):
         super().__init__()
         self.features = nn.Sequential(
@@ -106,6 +111,7 @@ class improved_Model(nn.Module):
         x = self.classifier(x)
         return x
 
+#训练内部过程模型
 def train_model(train_data_loader,model,optimizer,loss_fn):
     datanum = len(train_data_loader.dataset)
     batch_num = len(train_data_loader)
@@ -125,11 +131,20 @@ def train_model(train_data_loader,model,optimizer,loss_fn):
     train_loss = train_loss/batch_num
     return train_loss, train_accucary
 
+
 def run_train(Path,epochs,is_save=False,is_eval=True, lr=0.001):
+    '''
+    训练设置部分和结尾处理部分
+    :param epochs: 循环轮次
+    :param is_save: 是否保存为文件
+    :param is_eval: 是否进行评估
+    :param lr: 学习率
+    :return: 返回模型
+    '''
     train_loader, test_loader = data_ready(Path)
     model = improved_Model()
     model = model.to(device)
-    lossf = torch.nn.CrossEntropyLoss()
+    lossf = torch.nn.CrossEntropyLoss() #交叉熵函数作为损失函数
     optimizer = optim.Adam(model.parameters(), lr=lr)
     for epoch in range(epochs):
         model.train()
@@ -145,7 +160,7 @@ def run_train(Path,epochs,is_save=False,is_eval=True, lr=0.001):
         print(f"Test Loss:{average_loss},Accuracy:{test_accuracy*100:.3f}% ")
     return model
 
-def eval_model(model, test_loader, loss_fn=torch.nn.CrossEntropyLoss()):
+def eval_model(model, test_loader, loss_fn=torch.nn.CrossEntropyLoss()): #评估模型，分别给出loss和准确率
     model.eval()
     total_loss = 0
     total = 0
@@ -170,7 +185,7 @@ def eval_model(model, test_loader, loss_fn=torch.nn.CrossEntropyLoss()):
 
 
 
-def get_next_it(Path='models', base_name="model"):
+def get_next_it(Path='models', base_name="model"):  #存储模型时用于确定模型的名字
     # 列出文件夹中所有文件
     existing_files = os.listdir(Path)
     # 筛选出符合格式的文件
@@ -191,23 +206,25 @@ def get_next_it(Path='models', base_name="model"):
         next_number = 1  # 如果没有文件，使用1作为初始序号
     return f"{base_name}_{next_number}.pth"
 
-def load_model(model_name,Path = 'models'):
+def load_model(model_name,Path = 'models'): #加载训练好的模型
     model = improved_Model()
     model_path = os.path.join(Path, model_name)
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model = model.to(device)
     return model
 
-def pred_img(imgPath,model):
+def pred_img(imgPath,model):  #对于单张图片进行预测
+    #对图片进行transform，将其张量化和标准化
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))])
+    #以灰度图打开图片
     image = Image.open(imgPath).convert('L')
     image_tensor = transform(image.resize((28, 28)))
     #增加一个维度batch_size以符合标准
     image_tensor = image_tensor.unsqueeze(0)
     image_tensor = image_tensor.to(device)
-    plt.imshow(image_tensor.cpu().squeeze().numpy(), cmap='gray')
+    plt.imshow(image_tensor.cpu().squeeze().numpy(), cmap='gray')   #展示处理过后的图片
     plt.show()
     with torch.no_grad():
         outputs = model(image_tensor)
@@ -216,10 +233,10 @@ def pred_img(imgPath,model):
     print(f"识别结果: {result.item()}")
 
 if __name__ == "__main__":
-    num_classes = 10
+    num_classes = 10  #数字种类
     Path = 'datasets'
-    mode = 1
-    if mode ==1:
+    mode = 1   #选择模式，1为训练模式，2为预测模式
+    if mode == 1:
         # 从头训练模型
         model = run_train(Path, 10, is_save=True, lr=0.001)
     else:
@@ -228,7 +245,7 @@ if __name__ == "__main__":
         average_loss, accuracy = eval_model(model,test_loader)
         print(f"Test Loss:{average_loss:.5f},Accuracy:{accuracy * 100:.3f}% ")
 
-    #加载已经训练好的模型
+    #预测我自己手写的数字
     img_path = r"my_wrriten_digits\88.jpg"
     pred_img(img_path, model)
 
